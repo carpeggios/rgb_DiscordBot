@@ -1,0 +1,25 @@
+CREATE TABLE "perUser" (
+	"User_ID"	TEXT NOT NULL UNIQUE,
+	"Username"	TEXT NOT NULL DEFAULT '-',
+	"Gob_Qty"	INTEGER NOT NULL DEFAULT 0,
+	"Time_Accrued"	NUMERIC NOT NULL DEFAULT 0,
+	"Hunts"	INTEGER NOT NULL DEFAULT 0,
+	"Wings_Obtained"	INTEGER NOT NULL DEFAULT 0,
+	"Toggle_Stats"	INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY("User_ID")
+);
+
+CREATE TABLE "teamData" (
+	"Team_Name"	TEXT NOT NULL UNIQUE,
+	"Channel_ID"	TEXT,
+	"Gob_Qty"	INTEGER NOT NULL DEFAULT 0,
+	"Time_Accrued"	NUMERIC NOT NULL DEFAULT 0,
+	"Wings_Found"	INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY("Team_Name")
+);
+
+CREATE TABLE "privData" (
+	"User_ID"	TEXT NOT NULL,
+	"User_Nick_Default"	TEXT,
+	PRIMARY KEY("User_ID")
+)
