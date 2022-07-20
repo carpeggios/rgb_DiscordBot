@@ -32,67 +32,85 @@ global timers
 timers = []
 
 #QUERIES
+
+#Insert a new member into 'perUser' db. Default value initialized. 
+#Inserts if not existing, avoid duplciates and updates db to current member list. 
+#Useful for when Bot has downtime, and members have joined.
 def insert_newmember(id, name): #default table value.
-    #print('INSERT INTO perUser VALUES ("'+str(id)+'","'+str(name)+'", 0, "0", 0, 0, 0);')
-    #query = 'INSERT INTO perUser VALUES ("'+str(id)+'","'+str(name)+'", 0, "0", 0, 0, 0);'
 
     strID = str(id)
     strName = str(name)
-    insertQuery = """
-    BEGIN
-        IF NOT EXISTS(SELECT FROM perUser WHERE User_ID = [strID])
-        BEGIN
-            INSERT INTO perUser VALUES ([strID],[strName], 0, "0", 0, 0, 0)
-        END
-    END
-                  """
 
-    return insertQuery
+    #https://stackoverflow.com/questions/5243596/python-sql-query-string-formatting
+    fstringsql = (
+        f'BEGIN '
+        f'    IF NOT EXISTS(SELECT FROM perUser WHERE User_ID = {strID}) '
+        f'    BEGIN '
+        f'        INSERT INTO perUser VALUES ({strID},{strName}, 0, "0", 0, 0, 0) '
+        f'    END '
+        f'END;'
+    )
 
+    return fstringsql
+
+#Inserts a nickname for a newmember or for nickname change on 'privData' db.
+#Initializes nickname to be username in case user never customizes a nickname.
+#Useful for nickname changes to include stats in nickname, so user can turn off nickname stats...
+#and get back to their original nickname.
 def insert_nick(id, nick): #default table value.
-    #query = 'INSERT INTO privData VALUES ("'+str(id)+'","'+str(nick)+'");'
 
     strID = str(id)
     strNick = str(nick)
-    insertQuery = """
-    BEGIN
-        IF NOT EXISTS(SELECT FROM privData WHERE User_ID = [strID])
-        BEGIN
-            INSERT INTO perUser VALUES ([strID],[strNick, 0, "0", 0, 0, 0)
-        END
-    END
-                  """
+    #https://stackoverflow.com/questions/5243596/python-sql-query-string-formatting
+    fstringsql = (
+        f'BEGIN '
+        f'    IF NOT EXISTS(SELECT FROM privData WHERE User_ID = {strID}) '
+        f'    BEGIN '
+        f'        INSERT INTO privData VALUES ({strID},{strNick}) '
+        f'    END '
+        f'END;'
+    )
 
-    return insertQuery
+    return fstringsql
 
+#Updates nickname for when user actually customizes nickname.
 def update_nick(id, nick):
     query = 'UPDATE teamData SET User_Nick_Default = ' + str(nick) + ' WHERE User_ID = ' + str(id) + ';'
     return query
 
+#On event (member_leave), to delete member's entries on perUser and privData db's.
 def delete_member(id):
     query = 'DELETE FROM perUser(User_ID) VALUE(' + id + ');'
     return query
 
+#On command (add, a, subtract), add's qty to db.
 def add_gob(id, num):
     query = 'UPDATE perUser SET Gob_Qty = Gob_Qty + ' + str(num) + ' WHERE User_ID = ' + str(id) + ';'
     return query
 
+#On command (member_join), adds member to privData db.
 def insert_mempriv(id, name):
     query = 'INSERT INTO privData VALUES ("' + str(id) + '","' + str(name) + '");'
     return query
 
+#On event (member_leave), removes member from privData db.
 def delete_mempriv(id):
     query = 'DELETE FROM privData(User_ID) VALUE(' + id + ');'
     return query
 
+#On command (a), adds gob to specific team on 'teamData' db.
 def add_gobTeam(name):
     query = 'UPDATE teamData SET Gob_Qty = Gob_Qty + 1 WHERE Team_Name = "' + str(name) + '";'
     return query
 
+#Initializes team list, will help expand team list later.
 def add_team(team):
     query = 'INSERT INTO teamData VALUES ("'+str(team)+'", 0, 0, "0", 0);'
     return query
 
+#Toggle db value for a user to keep track of user's stat-toggle state.
+#1 = user wants stats on, update nickname to include stat. 
+#0 = user wants stats off, update nickname to go back to previous nickname or default nickname 
 def toggle_stats(id):
     temp_query = 'SELECT FROM Toggle_Stats FROM perUser WHERE User_ID = ' + str(id) + ';'
     if temp_query == 0:
@@ -103,27 +121,33 @@ def toggle_stats(id):
         query = 'UPDATE perUser SET Toggle_Stats = 1 WHERE User_ID = ' + str(id) + ';'
     return query
 
+#get gob value for user id.
 def get_gobs(id):
     query = 'SELECT Gob_Qty FROM perUser WHERE User_ID = ' + str(id) + ';'
     return query
 
+#get timer value for current user's timer. 
 def get_time(id):
     query = 'SELECT Time_Accrued FROM perUser WHERE User_ID = ' + str(id) + ';'
     return query
 
+#get wings state.
 def get_wings(id):
     query = 'SELECT Wings_Obtained FROM perUser WHERE User_ID = ' + str(id) + ';'
     return query
 
+#get hunts qty.
 def get_hunts(id):
     query = 'SELECT Hunts FROM perUser WHERE User_ID = ' + str(id) + ';'
     return query
 
+#get team ID so bot can use the ID to do channel/team mentions channel.send('<@{teamID}>')
 def get_teamID(team):
     query = 'SELECT Channel_ID FROM teamData WHERE Team_Name = "' + str(team) + '";'
     return query
 
 '''
+#start timer thread for the user.
 def timer_thread(userID, teamID, close):
 
     if close==0:
@@ -151,6 +175,8 @@ async def hello(ctx) :
     brief="Add X amount to your tracked goblin qty."
 )
 @commands.is_owner()
+#allows user to add X amt of gobs to their qty. Useful for initial setup.
+#broadcasts user's addition to channel.
 async def add(ctx, arg) :
     gobimg = await ctx.guild.fetch_emoji(995038023282597958)
     cnn = sqlite3.connect(DB_PATH)
@@ -167,6 +193,9 @@ async def add(ctx, arg) :
     brief="Just found one!"
 )
 @commands.is_owner()
+#meant to be the main command to +1. 
+#broadcasts user's addition to channel(s), to also include team and current total data.
+# "User(36) in team Eld(90) found a gob!"
 async def a(ctx) :
     gobimg = await ctx.guild.fetch_emoji(995038023282597958)
     teamID = ctx.author.top_role.id
@@ -188,6 +217,7 @@ async def a(ctx) :
     brief="Subtract X amount to your tracked goblin qty."
 )
 @commands.is_owner()
+#allows user to add -X amt of gobs to their qty. Useful for initial setup.
 async def subtract(ctx, arg) :
     gobimg = await ctx.guild.fetch_emoji(995038023282597958)
     cnn = sqlite3.connect(DB_PATH)
@@ -204,6 +234,9 @@ async def subtract(ctx, arg) :
     brief="Start timer to track hunt time. (Accumulative.)"
 )
 @commands.is_owner()
+#starts a timer for the user. threaded so each timer is unique to user.
+#timer should count towards user's total time, as well as contribute to team's time.
+#but only on 'end hunt'.
 async def starthunt(ctx) :
     await ctx.channel.send("starting timer...")
     #await timer_thread(ctx.author.id, 0)
@@ -214,6 +247,7 @@ async def starthunt(ctx) :
     brief="End timer hunt time."
 )
 @commands.is_owner()
+#stops timer. increments hunt qty +1. Add elapsed time to user's and team's total times.
 async def endhunt(ctx) :
     #time = await timer_thread(ctx.author.id, 1)
     await ctx.channel.send("ending timer.")
@@ -224,6 +258,10 @@ async def endhunt(ctx) :
     brief="Use command if you find wings!"
 )
 @commands.is_owner()
+#user to report to bot they have found wings.
+#report find and stats to entire channel (with prio?)
+#change nickname stats to show wings, and send msg to them...
+#send proof of wings to admin, for role change to wings role.
 async def cosmic(ctx) :
     wings = await ctx.guild.fetch_emoji(995000357413474407)
     cnn = sqlite3.connect(DB_PATH)
@@ -241,6 +279,7 @@ async def cosmic(ctx) :
     brief="Prints stats for yourself."
 )
 @commands.is_owner()
+#print out stats for self.
 async def statself(ctx) :
     cnn = sqlite3.connect(DB_PATH)
     cs = cnn.cursor()
@@ -262,6 +301,8 @@ async def statself(ctx) :
     brief="Toggle Nickname Stats."
 )
 @commands.is_owner()
+#turn on/off stats in nickname.
+#will display basic gob qty in nickname. [OFF] username -> [ON] username(36)
 async def togglestat(ctx) :
     cnn = sqlite3.connect(DB_PATH)
     cs = cnn.cursor()
@@ -288,6 +329,11 @@ async def togglestat(ctx) :
     brief="Post an interface."
 )
 @commands.is_owner()
+#admin command to post a message that includes buttons/interface for team usage.
+#commandless way to control bot to track stats.
+#button1 = !a command. (!a command for each user in channel.)
+#button2 = !starthunt command. (start timer for each user in channel.)
+#button3 = !endhunt command. (end timer for each user in channel, and tally time elapsed.)
 async def menu(ctx) :
     gobimg = await ctx.guild.fetch_emoji(995038023282597958)
     channelID = ctx.message.channel.id
@@ -297,6 +343,12 @@ async def menu(ctx) :
     #gob_interact = await bot.wait_for()
 
 '''
+@bot.command(
+    help="Print out stats for your team.",
+    brief="Print out stats for your team."
+)
+@commands.is_owner()
+#print out stats for team.
 async def statteam(ctx, arg) :
     cnn = sqlite3.connect(DB_PATH)
     cs = cnn.cursor()
@@ -308,6 +360,11 @@ async def statteam(ctx, arg) :
     cnn.commit()
     cnn.close()
 
+@bot.command(
+    help="Print out stats for the server.",
+    brief="Print out stats for the server."
+)
+#print out top 30 stats for server.
 async def stat30(ctx, arg) :
     cnn = sqlite3.connect(DB_PATH)
     cs = cnn.cursor()
@@ -330,6 +387,7 @@ async def on_message(message):
 '''
 
 @bot.event
+#create entries in tables 'perUser' and 'privData' for new member.
 async def on_member_join(member):
     try:
         cnn = sqlite3.connect(DB_PATH)
@@ -352,6 +410,7 @@ async def on_member_join(member):
 
 
 @bot.event
+#delete entries in tables 'perUser' and 'privData' for leaving member.
 async def on_member_leave(member):
     try:
         cnn = sqlite3.connect(DB_PATH)
